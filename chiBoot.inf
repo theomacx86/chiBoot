@@ -1,0 +1,29 @@
+[Defines]
+INF_VERSION     = 1.27
+BASE_NAME       = chiBoot
+FILE_GUID       = 6DDB3EF9-C9D8-4964-9BBC-5B44DFA50380
+MODULE_TYPE     = UEFI_APPLICATION
+VERSION_STRING  = 1.0
+ENTRY_POINT     = UefiMain
+
+
+[Sources]
+    chiBoot.c
+
+[LibraryClasses]
+UefiLib
+UefiApplicationEntryPoint
+UefiBootServicesTableLib
+
+[Packages]
+  MdePkg/MdePkg.dec
+  
+[Guids]
+
+[Ppis]
+
+[Protocols]
+
+[FeaturePcd]
+
+[Pcd]
