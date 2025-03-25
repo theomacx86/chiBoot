@@ -86,7 +86,7 @@ UefiMain (
     }
   }
 
-  while(1);
+  //while(1);
 
   Status = gBS->AllocatePool (EfiLoaderData, sizeof (LoaderData_S), (VOID **)&LoadedImage);
   if (EFI_ERROR (Status)) {
@@ -126,38 +126,60 @@ BuildMemoryMap (
   LoaderData_S  *LoaderData
   )
 {
-  EFI_STATUS             Status;
-  UINTN                  MemoryMapSize = 0, MapKey, DescriptorSize;
-  UINT32                 DescriptorVersion;
-  EFI_MEMORY_DESCRIPTOR  *MemoryMap = NULL;
+  EFI_STATUS Status;
+  UINTN MemoryMapSize = 0;
+  EFI_MEMORY_DESCRIPTOR * MemoryMap = NULL;
+  EFI_MEMORY_DESCRIPTOR * Current = NULL;
+  UINTN DescriptorSize = 0;
+  UINTN MapKey = 0;
+  UINT32 DescriptorVersion = 0;
+  UINTN TotalUsableMemory = 0;
 
-  Status = gBS->GetMemoryMap (&MemoryMapSize, MemoryMap, &MapKey, &DescriptorSize, &DescriptorVersion);
+  //Get memory map size first
+  Status = gBS->GetMemoryMap(&MemoryMapSize, MemoryMap, &MapKey, &DescriptorSize, &DescriptorVersion);
+  MemoryMapSize += DescriptorSize * 2;
 
-  do {
-    MemoryMap = (EFI_MEMORY_DESCRIPTOR *)AllocatePool (MemoryMapSize + DescriptorSize*2);
-    ASSERT (MemoryMap != NULL);
-    Status = gBS->GetMemoryMap (&MemoryMapSize, MemoryMap, &MapKey, &DescriptorSize, &DescriptorVersion);
-    if (EFI_ERROR (Status)) {
-      FreePool(MemoryMap);
-    }
-  } while (Status == EFI_BUFFER_TOO_SMALL);
+  gBS->AllocatePool(EfiLoaderData, MemoryMapSize, (VOID**) &MemoryMap);
 
-  if(Status != EFI_SUCCESS)
+  //First attempt.
+  Status = gBS->GetMemoryMap(&MemoryMapSize, MemoryMap, &MapKey, &DescriptorSize, &DescriptorVersion);
+
+  while(Status == EFI_BUFFER_TOO_SMALL)
   {
-    Print(L"fucked");
+    gBS->FreePool(MemoryMap);
+    MemoryMapSize += DescriptorSize * 2;
+    gBS->AllocatePool(EfiLoaderData, MemoryMapSize, (VOID**) &MemoryMap);
+    Status = gBS->GetMemoryMap(&MemoryMapSize, MemoryMap, &MapKey, &DescriptorSize, &DescriptorVersion); //new attempt
   }
-  ASSERT_EFI_ERROR (Status);
 
-  EFI_MEMORY_DESCRIPTOR  *MemoryMapEntry, *MemoryMapEnd;
-
-  MemoryMapEntry = MemoryMap;
-  MemoryMapEnd   = (EFI_MEMORY_DESCRIPTOR *)((UINT8 *)MemoryMap + MemoryMapSize);
-  while ((UINTN)MemoryMapEntry < (UINTN)MemoryMapEnd) {
-        if(MemoryMapEntry->Type != EfiConventionalMemory && MemoryMapEntry->Type != EfiUnusableMemory) continue;
-      Print (L"%8d %8d %4d\n", MemoryMapEntry->PhysicalStart, MemoryMapEntry->NumberOfPages, MemoryMapEntry->Type);
-
-    MemoryMapEntry = NEXT_MEMORY_DESCRIPTOR (MemoryMapEntry, DescriptorSize);
+  if(Status == EFI_INVALID_PARAMETER)
+  {
+    Print(L"Idiot");
+    return EFI_INVALID_PARAMETER;
   }
+
+  Print(L"We have a memmap lol\n");
+  Print(L"Map size %8u Number of descriptors %8u\n", MemoryMapSize, DescriptorSize);
+
+  Current = MemoryMap;
+
+  for(UINTN i = 0; i < MemoryMapSize / DescriptorSize; ++i)
+  {
+    if(Current->Type == EfiConventionalMemory ||
+      Current->Type == EfiLoaderData ||
+      Current->Type == EfiLoaderCode ||
+      Current->Type == EfiBootServicesCode ||
+      Current->Type == EfiBootServicesData ||
+      Current->Type == EfiPersistentMemory) 
+    {
+      Print(L"Usable range %16lx %16lx\n", Current->PhysicalStart, Current->NumberOfPages * 4096);
+      TotalUsableMemory += Current->NumberOfPages * 4096;
+    }
+    //Current +=  DescriptorSize;
+    Current = NEXT_MEMORY_DESCRIPTOR(Current, DescriptorSize);
+  }
+
+  Print(L"Total available memory (in bytes) %16lx\n", TotalUsableMemory);
 
   return EFI_SUCCESS;
 }
