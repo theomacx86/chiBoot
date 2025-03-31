@@ -1,4 +1,6 @@
 #include "Base.h"
+#include "Include/E820.h"
+#include "Library/BaseMemoryLib.h"
 #include "Library/DebugLib.h"
 #include "Library/DevicePathLib.h"
 #include "ProcessorBind.h"
@@ -181,5 +183,67 @@ BuildMemoryMap (
 
   Print(L"Total available memory (in bytes) %16lx\n", TotalUsableMemory);
 
+  Status = gBS->AllocatePool(EfiLoaderData, MemoryMapSize / DescriptorSize, (VOID**) &(LoaderData->E820Entries));
+  SetMem(LoaderData->E820Entries, (MemoryMapSize/DescriptorSize), 0);
+
+  if(EFI_ERROR(Status))
+  {
+    Print(L"Failed to allocate E820 buffer");
+    gBS->FreePool(MemoryMap);
+    return Status;
+  }
+
+  LoaderData->E820Count = MemoryMapSize / DescriptorSize;
+
+  for(UINTN i = 0; i < MemoryMapSize / DescriptorSize; ++i)
+  {
+    if(Current->Type == EfiConventionalMemory ||
+      Current->Type == EfiLoaderData ||
+      Current->Type == EfiLoaderCode ||
+      Current->Type == EfiBootServicesCode ||
+      Current->Type == EfiBootServicesData ||
+      Current->Type == EfiPersistentMemory) 
+    {
+      LoaderData->E820Entries[i].Type = E820_RAM;
+    }
+
+    if(Current->Type == EfiReservedMemoryType ||
+      Current->Type == EfiRuntimeServicesCode ||
+      Current->Type == EfiRuntimeServicesData ||
+      Current->Type == EfiUnusableMemory ||
+      Current->Type == EfiPersistentMemory ||
+      Current->Type == EfiPalCode)
+    {
+      LoaderData->E820Entries[i].Type = E820_UNUSABLE;
+    }
+
+    if(Current->Type == EfiACPIReclaimMemory)
+    {
+      LoaderData->E820Entries[i].Type = E820_ACPI;
+    }
+
+    if(Current->Type == EfiACPIMemoryNVS)
+    {
+      LoaderData->E820Entries[i].Type = E820_NVS;
+    }
+
+    if(Current->Type == EfiMemoryMappedIO ||
+      Current->Type == EfiMemoryMappedIOPortSpace )
+    {
+      LoaderData->E820Entries[i].Type = E820_RESERVED;
+    }
+
+    if(LoaderData->E820Entries[i].Type == 0)
+    {
+      LoaderData->E820Entries[i].Type = E820_UNUSABLE;
+    }
+
+    LoaderData->E820Entries[i].Address = Current->PhysicalStart;
+    LoaderData->E820Entries[i].Size = Current->NumberOfPages * 4096;
+  }
+  
+  //Memory map successfully built.
+  gBS->FreePool(MemoryMap);
+  
   return EFI_SUCCESS;
 }
