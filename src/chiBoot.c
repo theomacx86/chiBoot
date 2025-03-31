@@ -35,6 +35,7 @@ UefiMain (
   EFI_LOADED_IMAGE_PROTOCOL        *LoadedImage;
   EFI_SIMPLE_FILE_SYSTEM_PROTOCOL  *FileSystem;
   EFI_FILE_PROTOCOL                *FileProtocol;
+  EFI_FILE_PROTOCOL                *RootDir;
   EFI_FILE_INFO                    *FileInfo;
   UINTN                             BufferSize;
   
@@ -64,31 +65,19 @@ UefiMain (
     return EFI_OUT_OF_RESOURCES;
   }
   
-  Status = FileProtocol->Read(FileProtocol, &BufferSize, (VOID*) FileInfo);
-  if (EFI_ERROR (Status)) {
-    Print (L"Failed to read idk what");
-    return Status;
-  }
+  //Open root first !
+  Status = FileProtocol->Open(FileProtocol, &RootDir, L"\\", EFI_FILE_MODE_READ, EFI_FILE_DIRECTORY);
 
-  // Loop through the directory entries and print directories
   while (TRUE) {
-    if (EFI_ERROR(Status)) {
-      break;
+    BufferSize = sizeof(EFI_FILE_INFO) + 256 * sizeof(CHAR16);
+    Status = RootDir->Read(RootDir, &BufferSize, FileInfo);
+
+    if (EFI_ERROR(Status) || BufferSize == 0) {  // Stop when we reach the end
+        break;
     }
 
-    // Check if the file is a directory
-    if ((FileInfo->Attribute & EFI_FILE_DIRECTORY) != 0) {
-      Print(L"Directory: %s\n", FileInfo->FileName);
-    }
-
-    // Read next entry
-    Status = FileProtocol->Read(FileProtocol, &BufferSize, (VOID*)FileInfo);
-    if (EFI_ERROR(Status)) {
-      break;
-    }
-  }
-
-  //while(1);
+    Print(L"%s\n", FileInfo->FileName); 
+  } 
 
   Status = gBS->AllocatePool (EfiLoaderData, sizeof (LoaderData_S), (VOID **)&LoaderData);
   if (EFI_ERROR (Status)) {
