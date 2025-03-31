@@ -28,3 +28,8 @@ BuildMemoryMap(LoaderData_S * LoaderData);
 
 EFI_STATUS
 RegisterFramebuffer(LoaderData_S * LoaderData);
+
+EFI_STATUS
+PrintMemoryMap(
+  LoaderData_S *LoaderData
+);

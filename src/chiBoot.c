@@ -90,7 +90,7 @@ UefiMain (
 
   //while(1);
 
-  Status = gBS->AllocatePool (EfiLoaderData, sizeof (LoaderData_S), (VOID **)&LoadedImage);
+  Status = gBS->AllocatePool (EfiLoaderData, sizeof (LoaderData_S), (VOID **)&LoaderData);
   if (EFI_ERROR (Status)) {
     Print (L"Failed to allocate Loader data structure.");
     return Status;
@@ -101,6 +101,8 @@ UefiMain (
     Print (L"Fucked.");
     return Status;
   }
+
+  PrintMemoryMap(LoaderData);
 
   return EFI_SUCCESS;
 }
@@ -121,6 +123,44 @@ RegisterFramebuffer(LoaderData_S * LoaderData)
     }
 
     return EFI_SUCCESS;
+}
+
+EFI_STATUS
+PrintMemoryMap(
+  LoaderData_S *LoaderData
+)
+{
+  UINTN UsableSize = 0;
+
+  for(int i = 0; i < LoaderData->E820Count; ++i)
+  {
+    Print(L"Memory entry  (base %16lu size %16lu) ", LoaderData->E820Entries[i].Address, LoaderData->E820Entries[i].Size);
+    switch (LoaderData->E820Entries[i].Type) {
+      case E820_RAM:
+        Print(L"Usable\n");
+        UsableSize += LoaderData->E820Entries[i].Size;
+        break;
+      case E820_UNUSABLE:
+        Print(L"Unusable\n");
+        break;
+      case E820_RESERVED:
+        Print(L"Reserved\n");
+        break;
+      case E820_ACPI:
+        Print(L"ACPI\n");
+        break;
+      case E820_NVS:
+        Print(L"NVS\n");
+        break;
+      default:
+        Print(L"?\n");
+        break;
+    }
+  }
+
+  Print(L"Usable memory %16lu", UsableSize);
+
+  return EFI_SUCCESS;
 }
 
 EFI_STATUS
@@ -193,7 +233,10 @@ BuildMemoryMap (
     return Status;
   }
 
+  Print(L"Allocated %u bytes\n", MemoryMapSize/DescriptorSize);
+
   LoaderData->E820Count = MemoryMapSize / DescriptorSize;
+  Current = MemoryMap;
 
   for(UINTN i = 0; i < MemoryMapSize / DescriptorSize; ++i)
   {
@@ -233,6 +276,9 @@ BuildMemoryMap (
       LoaderData->E820Entries[i].Type = E820_RESERVED;
     }
 
+    //If we're facing a vendor defined memory type
+    //Declare it unusable.
+
     if(LoaderData->E820Entries[i].Type == 0)
     {
       LoaderData->E820Entries[i].Type = E820_UNUSABLE;
@@ -240,10 +286,13 @@ BuildMemoryMap (
 
     LoaderData->E820Entries[i].Address = Current->PhysicalStart;
     LoaderData->E820Entries[i].Size = Current->NumberOfPages * 4096;
+
+    Current = NEXT_MEMORY_DESCRIPTOR(Current, DescriptorSize);
   }
   
   //Memory map successfully built.
   gBS->FreePool(MemoryMap);
-  
+  Print(L"Successfully built memory map");
+
   return EFI_SUCCESS;
 }
