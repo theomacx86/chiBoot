@@ -9,6 +9,7 @@ ENTRY_POINT     = UefiMain
 
 [Sources]
     src/chiBoot.c
+    src/chiMemory.c
 
 [LibraryClasses]
 UefiLib
@@ -19,13 +20,14 @@ UefiBootServicesTableLib
   MdePkg/MdePkg.dec
   
 [Guids]
-
+gEfiFileInfoGuid
 [Ppis]
 
 [Protocols]
 gEfiSimpleFileSystemProtocolGuid
 gEfiLoadedImageProtocolGuid
 gEfiDevicePathProtocolGuid
+
 [FeaturePcd]
 
 [Pcd]

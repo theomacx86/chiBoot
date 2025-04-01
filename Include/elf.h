@@ -1,11 +1,9 @@
 #ifndef ELF_H
 #define ELF_H
 
-#define MAGIC 0x7f454c46        //0x7f - ELF
+#include <Uefi.h>
 
-typedef struct elf_header
-{
-    
-} ;
+#define ELF_MAGIC 0x464C457F        //0x7f - ELF
+
 
 #endif
