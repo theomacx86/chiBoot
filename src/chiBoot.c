@@ -1,5 +1,6 @@
 #include "AutoGen.h"
 #include "Base.h"
+#include "Library/BaseLib.h"
 #include "ProcessorBind.h"
 #include "Protocol/LoadedImage.h"
 #include "Uefi/UefiBaseType.h"
@@ -18,7 +19,6 @@
 
 EFI_LOADED_IMAGE_PROTOCOL  *LoadedImage;
 
-
 EFI_STATUS
 EFIAPI
 UefiMain (
@@ -31,7 +31,8 @@ UefiMain (
   VOID           *KernelBuffer;
   CHAR16         *KernelName     = L"\\kernel.elf";
   UINTN          KernelPageCount = 0;
-  UINTN KernelSize = 0;
+  UINTN          KernelSize      = 0;
+  Elf64_Ehdr     *ElfHeader;
 
   Status = gBS->HandleProtocol (ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **)&LoadedImage);
   if (EFI_ERROR (Status)) {
@@ -46,16 +47,10 @@ UefiMain (
   }
 
   Status = LoadKernelElf (KernelName, &KernelSize, &KernelBuffer, &KernelPageCount);
-  
-  UINT32 check = 0x7F454C46;
-  if( *((UINT32*)KernelBuffer) == check )
-  {
-    Print(L"ELF");
-  }
-  else{
-    Print(L"Not elf?");
-  }
-  
+
+  ElfHeader = (Elf64_Ehdr*) KernelBuffer;
+
+  Print(L"Offset %lx\n", (ElfHeader->e_shoff));
   return EFI_SUCCESS;
 }
 
@@ -73,7 +68,7 @@ LoadKernelElf (
   EFI_FILE_PROTOCOL                *KernelFile;
   EFI_FILE_INFO                    *FileInfo;
   UINTN                            BufferSize;
-  UINTN                     Pages;
+  UINTN                            Pages;
   VOID                             *KernelBufer;
 
   Status = gBS->HandleProtocol (LoadedImage->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, (VOID **)&Filesystem);
@@ -106,59 +101,54 @@ LoadKernelElf (
 
   Status = KernelFile->GetInfo (KernelFile, &gEfiFileInfoGuid, &BufferSize, FileInfo);
   if (EFI_ERROR (Status)) {
-    FreePool(FileInfo);
+    FreePool (FileInfo);
     Print (L"Failed to open file info.\n");
     return Status;
   }
 
-  Print(L"Filesize %16lu", (UINTN) FileInfo->FileSize );
+  Print (L"Filesize %16lu", (UINTN)FileInfo->FileSize);
 
-  if(FileInfo->FileSize % PAGE_SIZE == 0)
-  {
+  if (FileInfo->FileSize % PAGE_SIZE == 0) {
     Pages = FileInfo->FileSize / PAGE_SIZE;
-  }
-  else {
+  } else {
     Pages = FileInfo->FileSize / PAGE_SIZE + 1;
   }
 
-  Print(L"Allocating %lu pages (%lu bytes)\n", Pages, FileInfo->FileSize);
-  Status = gBS->AllocatePages(AllocateAnyPages, EfiLoaderCode, Pages, (EFI_PHYSICAL_ADDRESS*) &KernelBufer);
+  Print (L"Allocating %lu pages (%lu bytes)\n", Pages, FileInfo->FileSize);
+  Status = gBS->AllocatePages (AllocateAnyPages, EfiLoaderCode, Pages, (EFI_PHYSICAL_ADDRESS *)&KernelBufer);
 
   BufferSize = Pages * PAGE_SIZE;
 
   if (EFI_ERROR (Status)) {
     Print (L"Failed to allocate buffer.\n");
-    FreePool(FileInfo);
+    FreePool (FileInfo);
     return Status;
   }
 
-  Status = KernelFile->Read(KernelFile, &BufferSize, KernelBufer);
+  Status = KernelFile->Read (KernelFile, &BufferSize, KernelBufer);
   if (EFI_ERROR (Status)) {
     Print (L"Failed to read file in the buffer.\n");
-    FreePool(FileInfo);
-    FreePages(KernelBufer, Pages);
+    FreePool (FileInfo);
+    FreePages (KernelBufer, Pages);
     return Status;
   }
 
-  Print(L"Read %16lu bytes\n", BufferSize);
+  Print (L"Read %16lu bytes\n", BufferSize);
 
-  if(BufferSize > 0)
-  {
-    if( *((UINT32*) KernelBufer) == ELF_MAGIC )
-    {
-      Print(L"File is ELF.\n");
-    }
-    else{
-      FreePages(KernelBufer, Pages);
-      FreePool(FileInfo);
+  if (BufferSize > 0) {
+    if ( *((UINT32 *)KernelBufer) == ELF_MAGIC ) {
+      Print (L"File is ELF.\n");
+    } else {
+      FreePages (KernelBufer, Pages);
+      FreePool (FileInfo);
     }
   }
 
-  FreePool(FileInfo);
+  FreePool (FileInfo);
 
-  //Read successful
-  *Buffer = KernelBufer;
-  *PageCount = Pages;
+  // Read successful
+  *Buffer     = KernelBufer;
+  *PageCount  = Pages;
   *KernelSize = BufferSize;
 
   return EFI_SUCCESS;

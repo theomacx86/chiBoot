@@ -29,4 +29,11 @@ LoadKernelElf (
   OUT UINTN  *PageCount
   );
 
+EFI_STATUS
+RelocateKernelElf
+(
+  IN VOID *KernelBuffer,
+  IN EFI_PHYSICAL_ADDRESS Address
+);
+
 #endif
